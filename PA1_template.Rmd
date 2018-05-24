@@ -4,22 +4,135 @@ output:
   html_document:
     keep_md: true
 ---
+##Introduction
 
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals throughout the day. The data consists of two months of activity from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+This document presents the results from Project Assignment 1 in the Coursera course Reproducible Research, written in a single R markdown document that can be processed by knitr and transformed into an HTML file.
+
+##Data For the Analysis
+
+The data can be downloaded from the course web site:
+
+dataset: Activity Monitoring data
+
+The variables included in this dataset are:
+
+steps: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+
+date: The date on which the measurement was taken in YYYY-MM-DD format
+
+interval: Identifier for the 5-minute interval in which measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
 
 ## Loading and preprocessing the data
+Loading the data
+#Loading necessary library files
+library(dplyr)
+library(lubridate)
+library(ggplot2)
 
+#Reading the activity
+activity <- read.csv("activity.csv")
+
+#Tidying the data (using lubridate)
+activity$date <- ymd(activity$date)
+str(activity)
+head(activity)
 
 
 ## What is mean total number of steps taken per day?
+For this part of the assignment the missing values can be ignored.
+#Calculate the total number of steps per day using dplyr and group by date:
+steps <- activity %>%
+  filter(!is.na(steps)) %>%
+  group_by(date) %>%
+  summarize(steps = sum(steps)) %>%
+  print
 
+#Use ggplot for making the histogram:
+stepsplot <- ggplot(steps, aes(x = steps)) +
+  geom_histogram(fill = "firebrick", binwidth = 1000) +
+  labs(title = "Histogram of Steps per day", x = "Steps per day", y = "Frequency")
+stepsplot
+
+#Calculate the mean and median of the total number of steps taken per day:
+mean_steps <- mean(steps$steps, na.rm = TRUE)
+median_steps <- median(steps$steps, na.rm = TRUE)
+mean_steps
+median_steps
 
 
 ## What is the average daily activity pattern?
+#Calculate the average number of steps taken in each 5-minute interval per day using dplyr and group by interval:
+interval <- activity %>%
+  filter(!is.na(steps)) %>%
+  group_by(interval) %>%
+  summarize(steps = mean(steps))
+interval
 
+#Use ggplot for making the time series of the 5-minute interval and average steps taken:
+intervalplot <- ggplot(interval, aes(x=interval, y=steps)) +
+  geom_line(color = "firebrick")
+intervalplot
+
+#Use which.max() to find out the maximum steps, on average, across all the days:
+interval[which.max(interval$steps),]
 
 
 ## Imputing missing values
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the activity.
 
+#Summarize all the missing values:
+sum(is.na(activity$steps))
+Let’s take the approach to fill in a missing NA with the average number of steps in the same 5-min interval.
+
+#Create a new dataset as the original and use tapply for filling in the missing values with the average number of steps per 5-minute interval:
+activity_full <- activity
+nas <- is.na(activity_full$steps)
+avg_interval <- tapply(activity_full$steps, activity_full$interval, mean, na.rm=TRUE, simplify=TRUE)
+activity_full$steps[nas] <- avg_interval[as.character(activity_full$interval[nas])]
+
+#Check that there are no missing values:
+sum(is.na(activity_full$steps))
+
+Calculate the number of steps taken in each 5-minute interval per day using dplyr and group by interval. Use ggplot for making the histogram:
+
+steps_full <- activity_full %>%
+  filter(!is.na(steps)) %>%
+  group_by(date) %>%
+  summarize(steps = sum(steps)) %>%
+  print
+
+Plotting the above result
+intervalplotna <- ggplot(steps_full, aes(x = steps)) +
+  geom_histogram(fill = "firebrick", binwidth = 1000) +
+  labs(title = "Histogram of Steps per day, including missing values", x = "Steps per day", y = "Frequency")
+intervalplotna
+
+Calculate the mean and median steps with the filled in values:
+mean_steps_full <- mean(steps_full$steps, na.rm = TRUE)
+median_steps_full <- median(steps_full$steps, na.rm = TRUE)
+mean_steps_full
+median_steps_full
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+For this part the weekdays() will come handy. Use the dataset with the filled-in missing values for this part.
+
+#Use dplyr and mutate to create a new column, weektype, and apply whether the day is weekend or weekday:
+activity_full <- mutate(activity_full, weektype = ifelse(weekdays(activity_full$date) == "Saturday" | weekdays(activity_full$date) == "Sunday", "weekend", "weekday"))
+activity_full$weektype <- as.factor(activity_full$weektype)
+head(activity_full)
+
+#Calculate the average steps in the 5-minute interval and use ggplot for making the time series of the 5-minute interval for weekday and weekend, and compare the average steps:
+interval_full <- activity_full %>%
+  group_by(interval, weektype) %>%
+  summarise(steps = mean(steps))
+s <- ggplot(interval_full, aes(x=interval, y=steps, color = weektype)) +
+  geom_line() +
+  facet_wrap(~weektype, ncol = 1, nrow=2)
+print(s)
+
+From the two plots it seems that the test object is more active earlier in the day during weekdays compared to weekends, but more active throughout the weekends compared with weekdays (probably because the oject is working during the weekdays, hence moving less during the day).
